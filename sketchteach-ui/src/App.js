@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import axios from "axios";
 
-const GPU_NODE = "http://134.199.197.193:8001";
+const GPU_NODE = "https://134.199.197.193:8001";
 
 const COLORS = {
   bg: "#1a1a2e", panel: "#16213e", accent: "#e94560",
