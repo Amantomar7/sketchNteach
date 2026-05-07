@@ -53,103 +53,159 @@ def get_manim_script(steps: list[dict], scene_name: str) -> str:
         for s in steps
     ])
 
-    prompt = f"""You are an expert Manim animator. Write a Manim Community v0.20 Python script that creates a rich, educational whiteboard animation explaining the following concept step by step.
+    prompt = f"""You are an expert Manim animator. Write a Manim Community v0.20 Python script.
 
-CLASS NAME MUST BE: {scene_name}
+CLASS NAME MUST BE EXACTLY: {scene_name}
 
-CRITICAL RULES:
-- Background: self.camera.background_color = "#FEFCF3"
-- Every step MUST have a COMPLETELY DIFFERENT and UNIQUE diagram. Never reuse the same shapes.
-- Each step must FadeOut ALL previous content before showing next step.
-- Use rich, concept-specific visuals — not just circles and arrows.
-- Labels and text must be BLACK or DARK_BLUE (background is light cream).
-- Animate everything — use Create, Write, DrawBorderThenFill, GrowArrow, GrowFromCenter.
-- Add labels to every shape so viewer knows what it represents.
+BACKGROUND: self.camera.background_color = "#FEFCF3"
+ALL TEXT must be BLACK or DARK_BLUE. Never use WHITE.
 
-CONCEPT-SPECIFIC DRAWING GUIDE (use the right one for each step):
+═══════════════════════════════
+SCREEN LAYOUT — STRICTLY FOLLOW
+═══════════════════════════════
 
-FOR NETWORK/TCP/HTTP concepts:
-  # Labeled boxes for client and server
-  client = RoundedRectangle(width=2.5, height=1.2, corner_radius=0.2).set_stroke(BLUE, width=3).shift(LEFT*4)
-  client_label = Text("Client", color=BLUE, font_size=28).move_to(client)
-  server = RoundedRectangle(width=2.5, height=1.2, corner_radius=0.2).set_stroke(RED, width=3).shift(RIGHT*4)
-  server_label = Text("Server", color=RED, font_size=28).move_to(server)
-  # Animated packet arrow with label
-  packet = Arrow(start=client.get_right(), end=server.get_left(), color=GREEN, stroke_width=4)
-  packet_label = Text("SYN", font_size=22, color=GREEN).next_to(packet, UP)
-  self.play(DrawBorderThenFill(client), Write(client_label))
-  self.play(DrawBorderThenFill(server), Write(server_label))
-  self.play(GrowArrow(packet), Write(packet_label))
+The visible screen goes from y = +3.5 (top) to y = -3.5 (bottom).
+NEVER place anything below DOWN*2.8 or above UP*3.5.
 
-FOR TREE/GRAPH/DFS/BFS concepts:
-  # Draw actual tree with nodes and edges
-  root = Circle(radius=0.4).set_stroke(DARK_BLUE, width=3).set_fill(BLUE, opacity=0.2).shift(UP*2)
-  root_label = Text("A", color=DARK_BLUE, font_size=28).move_to(root)
-  left = Circle(radius=0.4).set_stroke(DARK_BLUE, width=3).set_fill(BLUE, opacity=0.2).shift(LEFT*2)
-  left_label = Text("B", color=DARK_BLUE, font_size=28).move_to(left)
-  right = Circle(radius=0.4).set_stroke(DARK_BLUE, width=3).set_fill(BLUE, opacity=0.2).shift(RIGHT*2)
-  right_label = Text("C", color=DARK_BLUE, font_size=28).move_to(right)
-  edge1 = Line(root.get_bottom(), left.get_top(), color=GRAY)
-  edge2 = Line(root.get_bottom(), right.get_top(), color=GRAY)
-  # Highlight traversal path
-  highlight = Circle(radius=0.4).set_fill(YELLOW, opacity=0.5).move_to(root)
+EXACT ZONES per step:
+  TOP    → header text     at to_edge(UP, buff=0.3)        [y ≈ +3.2]
+  MIDDLE → explanation     at DOWN*0.3                      [y ≈ -0.3]  
+  BOTTOM → diagram shapes  between DOWN*1.6 and DOWN*2.6   [y ≈ -1.6 to -2.6]
 
-FOR ARRAY/SEARCH/SORT concepts:
-  # Draw array cells with index labels
-  values = [3, 1, 4, 1, 5, 9, 2, 6]
+═══════════════════════════════
+MANDATORY STRUCTURE EVERY STEP
+═══════════════════════════════
+
+# 1. HEADER
+header = Text("Step N: Title", font_size=28, color=BLACK, weight=BOLD).to_edge(UP, buff=0.3)
+self.play(Write(header))
+
+# 2. EXPLANATION — split long text into 2 lines using \\n
+# If explanation is longer than 60 chars, split it at a natural break
+explanation = Text(
+    "First part of explanation\\nSecond part if needed.",
+    font_size=21, color=DARK_BLUE, line_spacing=1.5
+).move_to(ORIGIN + UP*0.8).set_width(10)
+self.play(Write(explanation, run_time=2))
+self.wait(0.5)
+
+# 3. DIAGRAM — ALL shapes between DOWN*1.6 and DOWN*2.6 ONLY
+# Build shapes SEPARATELY, never reference variable inside its own VGroup
+box1 = Rectangle(width=2, height=0.8).set_stroke(BLUE, width=2).shift(LEFT*3 + DOWN*2)
+label1 = Text("Label", font_size=20, color=BLUE).move_to(box1)
+self.play(Create(box1), Write(label1))
+
+# 4. WAIT + CLEAR
+self.wait(2)
+self.play(*[FadeOut(obj) for obj in self.mobjects])
+
+═══════════════════════════════
+TEXT WRAPPING RULE — CRITICAL
+═══════════════════════════════
+
+If an explanation sentence is longer than 55 characters, you MUST split it with \\n.
+Examples:
+  BAD:  "Thrashing occurs in systems with limited physical memory where the system spends more time."
+  GOOD: "Thrashing occurs when limited memory\\ncauses more swapping than actual execution."
+
+  BAD:  "Symptoms include a high page fault rate, decreased CPU utilization, and reduced performance."
+  GOOD: "Symptoms: high page fault rate,\\ndecreased CPU and system performance."
+
+Always SHORTEN + SPLIT. Max 55 chars per line. Max 2 lines.
+
+═══════════════════════════════
+DIAGRAM GUIDE PER CONCEPT
+═══════════════════════════════
+
+NETWORK/TCP/HTTP:
+  client = Rectangle(width=2, height=0.8).set_stroke(BLUE,width=2).shift(LEFT*3.5+DOWN*2)
+  client_lbl = Text("Client",font_size=20,color=BLUE).move_to(client)
+  server = Rectangle(width=2, height=0.8).set_stroke(RED,width=2).shift(RIGHT*3.5+DOWN*2)
+  server_lbl = Text("Server",font_size=20,color=RED).move_to(server)
+  arr = Arrow(client.get_right(),server.get_left(),color=GREEN,stroke_width=3)
+  arr_lbl = Text("SYN",font_size=18,color=GREEN).next_to(arr,UP,buff=0.1)
+  self.play(Create(client),Write(client_lbl),Create(server),Write(server_lbl))
+  self.play(GrowArrow(arr),Write(arr_lbl))
+
+MEMORY/OS CONCEPTS:
+  ram = Rectangle(width=5, height=0.9).set_stroke(BLUE,width=2).shift(DOWN*1.8)
+  ram_lbl = Text("Physical RAM",font_size=20,color=BLUE).move_to(ram)
+  used = Rectangle(width=3, height=0.9).set_stroke(RED,width=2).align_to(ram,LEFT)
+  used_lbl = Text("Used",font_size=18,color=RED).move_to(used)
+  free = Rectangle(width=2, height=0.9).set_stroke(GREEN,width=2).next_to(used,RIGHT,buff=0)
+  free_lbl = Text("Free",font_size=18,color=GREEN).move_to(free)
+  self.play(Create(ram),Write(ram_lbl))
+  self.play(Create(used),Write(used_lbl),Create(free),Write(free_lbl))
+
+TREE/DFS/BFS:
+  root = Circle(radius=0.35).set_stroke(DARK_BLUE,width=2).set_fill(BLUE,opacity=0.15).shift(UP*0.2+DOWN*1.6)
+  root_lbl = Text("A",font_size=22,color=DARK_BLUE).move_to(root)
+  left = Circle(radius=0.35).set_stroke(DARK_BLUE,width=2).set_fill(BLUE,opacity=0.15).shift(LEFT*1.8+DOWN*2.4)
+  left_lbl = Text("B",font_size=22,color=DARK_BLUE).move_to(left)
+  right = Circle(radius=0.35).set_stroke(DARK_BLUE,width=2).set_fill(BLUE,opacity=0.15).shift(RIGHT*1.8+DOWN*2.4)
+  right_lbl = Text("C",font_size=22,color=DARK_BLUE).move_to(right)
+  e1 = Line(root.get_bottom(),left.get_top(),color=GRAY)
+  e2 = Line(root.get_bottom(),right.get_top(),color=GRAY)
+  self.play(Create(root),Write(root_lbl))
+  self.play(Create(e1),Create(e2))
+  self.play(Create(left),Write(left_lbl),Create(right),Write(right_lbl))
+
+ARRAY/SEARCH/SORT:
+  values = [3,7,1,9,4,6]
   cells = VGroup(*[
-      VGroup(
-          Square(side_length=0.7).set_stroke(DARK_BLUE, width=2),
-          Text(str(v), font_size=22, color=BLACK)
-      ).arrange(ORIGIN)
-      for v in values
-  ]).arrange(RIGHT, buff=0.05).shift(UP)
-  indices = VGroup(*[
-      Text(str(i), font_size=16, color=GRAY).next_to(cells[i], DOWN, buff=0.1)
-      for i in range(len(values))
-  ])
-  # Highlight pointer
-  pointer = Triangle().scale(0.2).set_fill(RED, opacity=1).rotate(PI).next_to(cells[3], UP)
+      VGroup(Square(side_length=0.6).set_stroke(DARK_BLUE,width=2),
+             Text(str(v),font_size=18,color=BLACK))
+      .arrange(ORIGIN) for v in values
+  ]).arrange(RIGHT,buff=0.05).shift(DOWN*2)
+  self.play(Create(cells))
+  mid = SurroundingRectangle(cells[len(values)//2],color=RED,buff=0.05)
+  mid_lbl = Text("MID",font_size=16,color=RED).next_to(mid,UP,buff=0.1)
+  self.play(Create(mid),Write(mid_lbl))
 
-FOR STACK/RECURSION concepts:
-  # Draw stack frames building up
-  frames = ["main()", "func(4)", "func(3)", "func(2)", "func(1)"]
-  rects = VGroup(*[
-      VGroup(
-          RoundedRectangle(width=3, height=0.6, corner_radius=0.1).set_stroke(BLUE, width=2).set_fill(BLUE, opacity=0.1),
-          Text(f, font_size=20, color=DARK_BLUE)
-      ).arrange(ORIGIN)
-      for f in frames
-  ]).arrange(UP, buff=0.05).shift(DOWN)
+STACK/RECURSION:
+  frames = ["func(3)","func(2)","func(1)","base case"]
+  rects = []
+  for i,f in enumerate(frames):
+      r = Rectangle(width=3.5,height=0.55).set_stroke(BLUE,width=2).set_fill(BLUE,opacity=0.08)
+      r.shift(DOWN*1.7 + UP*i*0.57)
+      lbl = Text(f,font_size=18,color=DARK_BLUE).move_to(r)
+      rects.append((r,lbl))
+  for r,lbl in rects:
+      self.play(Create(r),Write(lbl),run_time=0.4)
 
-FOR PROCESS/FLOW concepts:
-  # Draw flowchart with decision diamonds
-  box1 = RoundedRectangle(width=3, height=0.9, corner_radius=0.2).set_stroke(BLUE, width=2).shift(UP*2)
-  label1 = Text("Start", font_size=24, color=BLUE).move_to(box1)
-  diamond = Square(side_length=1.2).rotate(PI/4).set_stroke(ORANGE, width=2).shift(UP*0.3)
-  d_label = Text("Check?", font_size=18, color=ORANGE).move_to(diamond)
-  yes_arrow = Arrow(start=diamond.get_right(), end=diamond.get_right()+RIGHT*1.5, color=GREEN)
-  yes_label = Text("Yes", font_size=18, color=GREEN).next_to(yes_arrow, UP)
+═══════════════════════════════
+CRITICAL CODING RULES
+═══════════════════════════════
 
-ANIMATION SEQUENCE PER STEP:
-1. Show step number + title at top (small, e.g. font_size=28)
-2. Animate the main diagram piece by piece (not all at once)
-3. Highlight the KEY element of this step (change color, add glow, move pointer)
-4. self.wait(2)
-5. FadeOut ALL objects before next step
+1. NEVER place anything at DOWN*3 or beyond — it will be off screen.
+2. NEVER reference a variable inside its own VGroup. Build shapes separately first.
+3. NEVER use WHITE text.
+4. ALWAYS split explanation text with \\n if over 55 chars per line.
+5. ALWAYS clear with: self.play(*[FadeOut(obj) for obj in self.mobjects])
+6. Diagram shapes ONLY between DOWN*1.5 and DOWN*2.6.
 
-Now write the complete script for these steps. Make each step visually distinct and rich:
+Now write the complete script for ALL 4 steps. 
+Each step: header → explanation (split with \\n) → diagram (in safe zone) → fadeout.
+
+Steps:
 {steps_text}
 
-Return ONLY valid Python code. No markdown fences. No explanation. Start directly with: from manim import *
+Return ONLY Python code. No markdown. No backticks. Start with: from manim import *
 """
 
     raw = ask_ollama(prompt)
     raw = re.sub(r'^```python\s*', '', raw, flags=re.MULTILINE)
     raw = re.sub(r'^```\s*', '', raw, flags=re.MULTILINE)
     return raw.strip()
-
 # ── Step 3: render Manim ──────────────────────────────────────────────────────
+def validate_and_fix_script(script: str, scene_name: str) -> str:
+    """Try to compile the script, return it if valid."""
+    try:
+        compile(script, "<string>", "exec")
+        return script
+    except SyntaxError as e:
+        raise Exception(f"Syntax error in generated script: {e}")
+
 def render_manim(script: str, scene_name: str) -> str:
     script_path = os.path.join(ANIM_DIR, f"{scene_name}.py")
     with open(script_path, "w") as f:
@@ -165,14 +221,128 @@ def render_manim(script: str, scene_name: str) -> str:
     if os.path.exists(mp4_pattern):
         return mp4_pattern
 
-    # Fallback search
     for root, dirs, files in os.walk(os.path.join(ANIM_DIR, "media")):
         for f in files:
             if f == f"{scene_name}.mp4":
                 return os.path.join(root, f)
 
-    raise Exception(f"Manim render failed:\n{result.stderr[-1000:]}")
+    raise Exception(f"RENDER_ERROR:{result.stderr[-2000:]}")
 
+def fix_script_with_llm(script: str, error: str, scene_name: str) -> str:
+    """Ask the model to fix its own broken script."""
+    prompt = f"""The following Manim Python script has an error. Fix it and return ONLY the corrected Python code.
+No markdown, no backticks, no explanation. Just the fixed code starting with: from manim import *
+
+ERROR:
+{error[:800]}
+
+BROKEN SCRIPT:
+{script}
+
+COMMON FIXES:
+- Never reference a variable inside the VGroup that defines it (memory_diagram[0] inside VGroup(...) that creates memory_diagram)
+- Instead build shapes separately first, then group them:
+  box1 = Rectangle(...)
+  box2 = Rectangle(...).next_to(box1, RIGHT)
+  group = VGroup(box1, box2)
+- Make sure all Text colors are BLACK or DARK_BLUE (background is light cream #FEFCF3)
+- Every object must be added to scene with self.play() or self.add()
+
+Return only the fixed Python code:"""
+
+    raw = ask_ollama(prompt)
+    raw = re.sub(r'^```python\s*', '', raw, flags=re.MULTILINE)
+    raw = re.sub(r'^```\s*', '', raw, flags=re.MULTILINE)
+    return raw.strip()
+
+
+def get_fallback_script(steps: list[dict], scene_name: str) -> str:
+    step_blocks = []
+    colors = ["BLUE", "GREEN", "ORANGE", "PURE_RED"]
+    shapes = ["RoundedRectangle(width=7, height=1.5, corner_radius=0.2)",
+              "RoundedRectangle(width=7, height=1.5, corner_radius=0.2)",
+              "RoundedRectangle(width=7, height=1.5, corner_radius=0.2)",
+              "RoundedRectangle(width=7, height=1.5, corner_radius=0.2)"]
+
+    for i, s in enumerate(steps):
+        color = colors[i % len(colors)]
+        # Safely escape quotes in text
+        title_safe = s['title'].replace('"', "'")
+        explanation_safe = s['explanation'].replace('"', "'")[:80]
+        step_blocks.append(f"""
+        # ── Step {s['step']} ──
+        header_{i} = Text("Step {s['step']}: {title_safe}", font_size=30, color=BLACK, weight=BOLD).to_edge(UP, buff=0.3)
+        explanation_{i} = Text(
+            "{explanation_safe}",
+            font_size=21, color=DARK_BLUE, line_spacing=1.4
+        ).next_to(header_{i}, DOWN, buff=0.4).set_width(11)
+        shape_{i} = {shapes[i]}.set_stroke({color}, width=3).shift(DOWN*2.2)
+        shape_label_{i} = Text("{title_safe}", font_size=24, color={color}, weight=BOLD).move_to(shape_{i})
+        self.play(Write(header_{i}))
+        self.play(Write(explanation_{i}, run_time=2.5))
+        self.play(Create(shape_{i}), Write(shape_label_{i}))
+        self.wait(2)
+        self.play(*[FadeOut(obj) for obj in self.mobjects])
+""")
+
+    blocks_code = "\n".join(step_blocks)
+    return f"""from manim import *
+class {scene_name}(Scene):
+    def construct(self):
+        self.camera.background_color = "#FEFCF3"
+{blocks_code}
+"""
+
+@app.post("/explain")
+async def explain(q: Question):
+    scene_name = "SketchScene_" + uuid.uuid4().hex[:8]
+
+    # 1. Get explanation
+    steps = get_explanation(q.question)
+
+    # 2. Get Manim script
+    script = get_manim_script(steps, scene_name)
+
+    # 3. Try rendering with up to 2 auto-fix retries
+    video_path = None
+    last_error = ""
+    for attempt in range(3):
+        try:
+            loop = asyncio.get_event_loop()
+            video_path = await loop.run_in_executor(None, render_manim, script, scene_name)
+            break  # success
+        except Exception as e:
+            last_error = str(e)
+            if "RENDER_ERROR:" in last_error and attempt < 2:
+                print(f"Attempt {attempt+1} failed, asking LLM to fix...")
+                error_detail = last_error.replace("RENDER_ERROR:", "")
+                # Use new scene name for retry
+                scene_name = "SketchScene_" + uuid.uuid4().hex[:8]
+                if attempt == 1:
+                    # Second failure — use reliable fallback
+                    script = get_fallback_script(steps, scene_name)
+                else:
+                    script = fix_script_with_llm(script, error_detail, scene_name)
+            else:
+                # Use fallback on final attempt
+                scene_name = "SketchScene_" + uuid.uuid4().hex[:8]
+                script = get_fallback_script(steps, scene_name)
+                try:
+                    video_path = await loop.run_in_executor(None, render_manim, script, scene_name)
+                except:
+                    raise Exception("All render attempts failed")
+                break
+
+    # 4. Generate audio in parallel with last render attempt
+    await generate_audio(steps)
+
+    latest_video_path["path"] = video_path
+
+    return {
+        "steps": steps,
+        "video_url": f"/video/{scene_name}",
+        "audio_url": "/audio"
+    }
 # ── Step 4: generate audio ────────────────────────────────────────────────────
 async def generate_audio(steps: list[dict]) -> str:
     text = " ".join([
@@ -186,31 +356,6 @@ async def generate_audio(steps: list[dict]) -> str:
 # ── API ───────────────────────────────────────────────────────────────────────
 latest_video_path = {}
 
-@app.post("/explain")
-async def explain(q: Question):
-    scene_name = "SketchScene_" + uuid.uuid4().hex[:8]
-
-    # 1. Get explanation
-    steps = get_explanation(q.question)
-
-    # 2. Get Manim script from LLM
-    script = get_manim_script(steps, scene_name)
-
-    # 3. Render animation + generate audio in parallel
-    loop = asyncio.get_event_loop()
-    video_path, _ = await asyncio.gather(
-        loop.run_in_executor(None, render_manim, script, scene_name),
-        generate_audio(steps)
-    )
-
-    latest_video_path["path"] = video_path
-    token = scene_name
-
-    return {
-        "steps": steps,
-        "video_url": f"/video/{token}",
-        "audio_url": "/audio"
-    }
 
 @app.get("/video/{token}")
 def get_video(token: str):
